@@ -138,6 +138,8 @@ struct MutableCFOptions {
         max_successive_merges(options.max_successive_merges),
         inplace_update_num_locks(options.inplace_update_num_locks),
         prefix_extractor(options.prefix_extractor),
+        compaction_prefix_extractor(options.compaction_prefix_extractor),
+        compaction_prefix_strict(options.compaction_prefix_strict),
         disable_auto_compactions(options.disable_auto_compactions),
         soft_pending_compaction_bytes_limit(
             options.soft_pending_compaction_bytes_limit),
@@ -177,6 +179,8 @@ struct MutableCFOptions {
         max_successive_merges(0),
         inplace_update_num_locks(0),
         prefix_extractor(nullptr),
+        compaction_prefix_extractor(nullptr),
+        compaction_prefix_strict(false),
         disable_auto_compactions(false),
         soft_pending_compaction_bytes_limit(0),
         hard_pending_compaction_bytes_limit(0),
@@ -226,7 +230,9 @@ struct MutableCFOptions {
   size_t max_successive_merges;
   size_t inplace_update_num_locks;
   std::shared_ptr<const SliceTransform> prefix_extractor;
-
+  std::shared_ptr<const SliceTransform> compaction_prefix_extractor;
+  bool compaction_prefix_strict;
+  
   // Compaction related options
   bool disable_auto_compactions;
   uint64_t soft_pending_compaction_bytes_limit;

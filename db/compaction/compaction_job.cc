@@ -32,6 +32,7 @@
 #include "db/merge_context.h"
 #include "db/merge_helper.h"
 #include "db/range_del_aggregator.h"
+#include "db/should_stop_before.h"
 #include "db/version_set.h"
 #include "file/filename.h"
 #include "file/read_write_util.h"
@@ -148,13 +149,6 @@ struct CompactionJob::SubcompactionState {
   uint64_t num_output_records;
   CompactionJobStats compaction_job_stats;
   uint64_t approx_size;
-  // An index that used to speed up ShouldStopBefore().
-  size_t grandparent_index = 0;
-  // The number of bytes overlapping between the current output and
-  // grandparent files used in ShouldStopBefore().
-  uint64_t overlapped_bytes = 0;
-  // A flag determine whether the key has been seen in ShouldStopBefore()
-  bool seen_key = false;
 
   SubcompactionState(Compaction* c, Slice* _start, Slice* _end,
                      uint64_t size = 0)
@@ -167,10 +161,7 @@ struct CompactionJob::SubcompactionState {
         total_bytes(0),
         num_input_records(0),
         num_output_records(0),
-        approx_size(size),
-        grandparent_index(0),
-        overlapped_bytes(0),
-        seen_key(false) {
+        approx_size(size) {
     assert(compaction != nullptr);
   }
 
@@ -190,9 +181,6 @@ struct CompactionJob::SubcompactionState {
     num_output_records = std::move(o.num_output_records);
     compaction_job_stats = std::move(o.compaction_job_stats);
     approx_size = std::move(o.approx_size);
-    grandparent_index = std::move(o.grandparent_index);
-    overlapped_bytes = std::move(o.overlapped_bytes);
-    seen_key = std::move(o.seen_key);
     return *this;
   }
 
@@ -200,39 +188,6 @@ struct CompactionJob::SubcompactionState {
   SubcompactionState(const SubcompactionState&) = delete;
 
   SubcompactionState& operator=(const SubcompactionState&) = delete;
-
-  // Returns true iff we should stop building the current output
-  // before processing "internal_key".
-  bool ShouldStopBefore(const Slice& internal_key, uint64_t curr_file_size) {
-    const InternalKeyComparator* icmp =
-        &compaction->column_family_data()->internal_comparator();
-    const std::vector<FileMetaData*>& grandparents = compaction->grandparents();
-
-    // Scan to find earliest grandparent file that contains key.
-    while (grandparent_index < grandparents.size() &&
-           icmp->Compare(internal_key,
-                         grandparents[grandparent_index]->largest.Encode()) >
-               0) {
-      if (seen_key) {
-        overlapped_bytes += grandparents[grandparent_index]->fd.GetFileSize();
-      }
-      assert(grandparent_index + 1 >= grandparents.size() ||
-             icmp->Compare(
-                 grandparents[grandparent_index]->largest.Encode(),
-                 grandparents[grandparent_index + 1]->smallest.Encode()) <= 0);
-      grandparent_index++;
-    }
-    seen_key = true;
-
-    if (overlapped_bytes + curr_file_size >
-        compaction->max_compaction_bytes()) {
-      // Too much overlap for current output; start new output
-      overlapped_bytes = 0;
-      return true;
-    }
-
-    return false;
-  }
 };
 
 // Maintains state for the entire compaction
@@ -713,6 +668,10 @@ Status CompactionJob::Install(const MutableCFOptions& mutable_cf_options) {
   AutoThreadOperationStageUpdater stage_updater(
       ThreadStatus::STAGE_COMPACTION_INSTALL);
   db_mutex_->AssertHeld();
+
+  compaction_prefix_extractor = mutable_cf_options.compaction_prefix_extractor;
+  compaction_prefix_strict = mutable_cf_options.compaction_prefix_strict;
+
   Status status = compact_->status;
   ColumnFamilyData* cfd = compact_->compaction->column_family_data();
   cfd->internal_stats()->AddCompactionStats(
@@ -813,6 +772,13 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
 
   ColumnFamilyData* cfd = sub_compact->compaction->column_family_data();
 
+  ShouldStopBefore stop_before(
+    &sub_compact->compaction->column_family_data()->internal_comparator(),
+    sub_compact->compaction->grandparents(),
+    sub_compact->compaction->max_compaction_bytes(),
+    compaction_prefix_extractor,
+    compaction_prefix_strict);
+  
   // Create compaction filter and fail the compaction if
   // IgnoreSnapshots() = false because it is not supported anymore
   const CompactionFilter* compaction_filter =
@@ -898,8 +864,8 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
     // ShouldStopBefore() maintains state based on keys processed so far. The
     // compaction loop always calls it on the "next" key, thus won't tell it the
     // first key. So we do that here.
-    sub_compact->ShouldStopBefore(c_iter->key(),
-                                  sub_compact->current_output_file_size);
+    stop_before.test_key(c_iter->key(),
+                         sub_compact->current_output_file_size);
   }
   const auto& c_iter_stats = c_iter->iter_stats();
 
@@ -965,8 +931,8 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
     }
     if (!output_file_ended && c_iter->Valid() &&
         sub_compact->compaction->output_level() != 0 &&
-        sub_compact->ShouldStopBefore(c_iter->key(),
-                                      sub_compact->current_output_file_size) &&
+        stop_before.test_key(c_iter->key(),
+                             sub_compact->current_output_file_size) &&
         sub_compact->builder != nullptr) {
       // (2) this key belongs to the next file. For historical reasons, the
       // iterator status after advancing will be given to

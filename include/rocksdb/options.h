@@ -255,6 +255,20 @@ struct ColumnFamilyOptions : public AdvancedColumnFamilyOptions {
   // Default: nullptr
   std::shared_ptr<const SliceTransform> prefix_extractor = nullptr;
 
+  // If non-nullptr, use the specified function during flush and 
+  // compaction operations as part of the criteria to determine when
+  // the current .sst file should close and another started.
+  //
+  // This may be the same fuction used for prefix_extractor if its
+  // underlying logic does not hold any state.
+  // Default: nullptr
+  std::shared_ptr<const SliceTransform> compaction_prefix_extractor = nullptr;
+
+  // if compaction_prefix_extractor non-nullptr, true setting will force
+  // a new file at each prefix change.  false setting will also consider
+  // current file size and overlap with keys in "grandparent" level.
+  bool compaction_prefix_strict = false;
+  
   // Control maximum total data size for a level.
   // max_bytes_for_level_base is the max total for level-1.
   // Maximum number of bytes for level L can be calculated as

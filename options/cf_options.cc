@@ -147,6 +147,12 @@ void MutableCFOptions::Dump(Logger* log) const {
   ROCKS_LOG_INFO(
       log, "                         prefix_extractor: %s",
       prefix_extractor == nullptr ? "nullptr" : prefix_extractor->Name());
+  ROCKS_LOG_INFO(
+      log, "              compaction_prefix_extractor: %s",
+      compaction_prefix_extractor == nullptr ? "nullptr" : compaction_prefix_extractor->Name());
+  ROCKS_LOG_INFO(
+      log, "                 compaction_prefix_strict: %d",
+      static_cast<int>(compaction_prefix_strict));
   ROCKS_LOG_INFO(log, "                 disable_auto_compactions: %d",
                  disable_auto_compactions);
   ROCKS_LOG_INFO(log, "      soft_pending_compaction_bytes_limit: %" PRIu64,

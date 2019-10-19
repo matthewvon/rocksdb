@@ -192,6 +192,9 @@ class CompactionJob {
   std::vector<uint64_t> sizes_;
   Env::WriteLifeTimeHint write_hint_;
   Env::Priority thread_pri_;
+
+  std::shared_ptr<const SliceTransform> compaction_prefix_extractor;
+  bool compaction_prefix_strict = false;
 };
 
 }  // namespace rocksdb

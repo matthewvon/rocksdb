@@ -162,6 +162,8 @@ ColumnFamilyOptions BuildColumnFamilyOptions(
   cf_opts.inplace_update_num_locks =
       mutable_cf_options.inplace_update_num_locks;
   cf_opts.prefix_extractor = mutable_cf_options.prefix_extractor;
+  cf_opts.compaction_prefix_extractor = mutable_cf_options.compaction_prefix_extractor;
+  cf_opts.compaction_prefix_strict = mutable_cf_options.compaction_prefix_strict;
 
   // Compaction related options
   cf_opts.disable_auto_compactions =
@@ -1984,6 +1986,14 @@ std::unordered_map<std::string, OptionTypeInfo>
          {offset_of(&ColumnFamilyOptions::prefix_extractor),
           OptionType::kSliceTransform, OptionVerificationType::kByNameAllowNull,
           true, offsetof(struct MutableCFOptions, prefix_extractor)}},
+        {"compaction_prefix_extractor",
+         {offset_of(&ColumnFamilyOptions::compaction_prefix_extractor),
+          OptionType::kSliceTransform, OptionVerificationType::kByNameAllowNull,
+          true, offsetof(struct MutableCFOptions, compaction_prefix_extractor)}},
+        {"compaction_prefix_strict",
+         {offset_of(&ColumnFamilyOptions::compaction_prefix_strict),
+          OptionType::kBoolean, OptionVerificationType::kNormal, true,
+          offsetof(struct MutableCFOptions, compaction_prefix_strict)}},
         {"memtable_insert_with_hint_prefix_extractor",
          {offset_of(
               &ColumnFamilyOptions::memtable_insert_with_hint_prefix_extractor),
