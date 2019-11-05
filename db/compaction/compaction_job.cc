@@ -31,6 +31,7 @@
 #include "db/memtable_list.h"
 #include "db/merge_context.h"
 #include "db/merge_helper.h"
+#include "db/output_files_state.h"
 #include "db/range_del_aggregator.h"
 #include "db/should_stop_before.h"
 #include "db/version_set.h"
@@ -105,10 +106,11 @@ const char* GetCompactionReasonString(CompactionReason compaction_reason) {
 }
 
 // Maintains state for each sub-compaction
-struct CompactionJob::SubcompactionState {
+struct CompactionJob::SubcompactionState : public OutputFilesState {
   const Compaction* compaction;
   std::unique_ptr<CompactionIterator> c_iter;
 
+#if 0
   // The boundaries of the key-range this compaction is interested in. No two
   // subcompactions may have overlapping key-ranges.
   // 'start' is inclusive, 'end' is exclusive, and nullptr means unbounded
@@ -149,38 +151,28 @@ struct CompactionJob::SubcompactionState {
   uint64_t num_output_records;
   CompactionJobStats compaction_job_stats;
   uint64_t approx_size;
-
+#endif
+  
   SubcompactionState(Compaction* c, Slice* _start, Slice* _end,
+                     EventLogger * _event_logger, const std::string& _dbname,
+                     int _job_id, bool _is_flush, bool _bottommost_level,
+                     InstrumentedMutex* _db_mutex, SequenceNumber _earliest_snapshot,
+                     ErrorHandler* _db_error_handler,
                      uint64_t size = 0)
-      : compaction(c),
-        start(_start),
-        end(_end),
-        outfile(nullptr),
-        builder(nullptr),
-        current_output_file_size(0),
-        total_bytes(0),
-        num_input_records(0),
-        num_output_records(0),
-        approx_size(size) {
+    : OutputFilesState(c->column_family_data(), _start, _end, _event_logger,
+                       _dbname, _job_id, _is_flush, _bottommost_level,
+                       _db_mutex, _earliest_snapshot, _db_error_handler, size),
+      compaction(c) {
     assert(compaction != nullptr);
   }
 
-  SubcompactionState(SubcompactionState&& o) { *this = std::move(o); }
+  SubcompactionState(SubcompactionState&& o)
+    : OutputFilesState(std::move(o))
+  { *this = std::move(o); }
 
   SubcompactionState& operator=(SubcompactionState&& o) {
+    OutputFilesState::operator=(std::move(o));
     compaction = std::move(o.compaction);
-    start = std::move(o.start);
-    end = std::move(o.end);
-    status = std::move(o.status);
-    outputs = std::move(o.outputs);
-    outfile = std::move(o.outfile);
-    builder = std::move(o.builder);
-    current_output_file_size = std::move(o.current_output_file_size);
-    total_bytes = std::move(o.total_bytes);
-    num_input_records = std::move(o.num_input_records);
-    num_output_records = std::move(o.num_output_records);
-    compaction_job_stats = std::move(o.compaction_job_stats);
-    approx_size = std::move(o.approx_size);
     return *this;
   }
 
@@ -378,12 +370,16 @@ void CompactionJob::Prepare() {
     for (size_t i = 0; i <= boundaries_.size(); i++) {
       Slice* start = i == 0 ? nullptr : &boundaries_[i - 1];
       Slice* end = i == boundaries_.size() ? nullptr : &boundaries_[i];
-      compact_->sub_compact_states.emplace_back(c, start, end, sizes_[i]);
+      compact_->sub_compact_states.emplace_back(c, start, end, event_logger_,
+                                                dbname_, job_id_, bottommost_level_, false, db_mutex_,
+                                                EarliestSnapshot(), db_error_handler_, sizes_[i]);
     }
     RecordInHistogram(stats_, NUM_SUBCOMPACTIONS_SCHEDULED,
                       compact_->sub_compact_states.size());
   } else {
-    compact_->sub_compact_states.emplace_back(c, nullptr, nullptr);
+    compact_->sub_compact_states.emplace_back(c, nullptr, nullptr, event_logger_,
+                                              dbname_, job_id_, bottommost_level_, false, db_mutex_,
+                                              EarliestSnapshot(), db_error_handler_);
   }
 }
 
