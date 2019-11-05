@@ -100,6 +100,10 @@ class CompactionJob {
   // Add compaction input/output to the current version
   Status Install(const MutableCFOptions& mutable_cf_options);
 
+  SequenceNumber EarliestSnapshot() const {
+    return (existing_snapshots_.size() > 0 ? existing_snapshots_[0] : kMaxSequenceNumber);
+    }
+    
  private:
   struct SubcompactionState;
 
