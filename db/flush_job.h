@@ -18,6 +18,7 @@
 
 #include "db/column_family.h"
 #include "db/dbformat.h"
+#include "db/error_handler.h"
 #include "db/flush_scheduler.h"
 #include "db/internal_stats.h"
 #include "db/job_context.h"
@@ -69,7 +70,7 @@ class FlushJob {
            Directory* output_file_directory, CompressionType output_compression,
            Statistics* stats, EventLogger* event_logger, bool measure_io_stats,
            const bool sync_output_directory, const bool write_manifest,
-           Env::Priority thread_pri);
+           Env::Priority thread_pri, ErrorHandler * error_handler);
 
   ~FlushJob();
 
@@ -139,6 +140,7 @@ class FlushJob {
   Version* base_;
   bool pick_memtable_called;
   Env::Priority thread_pri_;
+  ErrorHandler * error_handler_;
 };
 
 }  // namespace rocksdb
