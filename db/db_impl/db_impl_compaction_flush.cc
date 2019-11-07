@@ -154,7 +154,8 @@ Status DBImpl::FlushMemTableToOutputFile(
       GetDataDir(cfd, 0U),
       GetCompressionFlush(*cfd->ioptions(), mutable_cf_options), stats_,
       &event_logger_, mutable_cf_options.report_bg_io_stats,
-      true /* sync_output_directory */, true /* write_manifest */, thread_pri);
+      true /* sync_output_directory */, true /* write_manifest */, thread_pri,
+      &error_handler_);
 
   FileMetaData file_meta;
 
@@ -338,7 +339,7 @@ Status DBImpl::AtomicFlushMemTablesToOutputFiles(
         data_dir, GetCompressionFlush(*cfd->ioptions(), mutable_cf_options),
         stats_, &event_logger_, mutable_cf_options.report_bg_io_stats,
         false /* sync_output_directory */, false /* write_manifest */,
-        thread_pri);
+        thread_pri, &error_handler_);
     jobs.back().PickMemTable();
   }
 

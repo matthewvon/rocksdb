@@ -134,7 +134,7 @@ TEST_F(FlushJobTest, Empty) {
                      snapshot_checker, &job_context, nullptr, nullptr, nullptr,
                      kNoCompression, nullptr, &event_logger, false,
                      true /* sync_output_directory */,
-                     true /* write_manifest */, Env::Priority::USER);
+                     true /* write_manifest */, Env::Priority::USER, nullptr);
   {
     InstrumentedMutexLock l(&mutex_);
     flush_job.PickMemTable();
@@ -182,7 +182,7 @@ TEST_F(FlushJobTest, NonEmpty) {
                      snapshot_checker, &job_context, nullptr, nullptr, nullptr,
                      kNoCompression, db_options_.statistics.get(),
                      &event_logger, true, true /* sync_output_directory */,
-                     true /* write_manifest */, Env::Priority::USER);
+                     true /* write_manifest */, Env::Priority::USER, nullptr);
 
   HistogramData hist;
   FileMetaData file_meta;
@@ -246,7 +246,7 @@ TEST_F(FlushJobTest, FlushMemTablesSingleColumnFamily) {
                      &job_context, nullptr, nullptr, nullptr, kNoCompression,
                      db_options_.statistics.get(), &event_logger, true,
                      true /* sync_output_directory */,
-                     true /* write_manifest */, Env::Priority::USER);
+                     true /* write_manifest */, Env::Priority::USER, nullptr);
   HistogramData hist;
   FileMetaData file_meta;
   mutex_.Lock();
@@ -317,7 +317,7 @@ TEST_F(FlushJobTest, FlushMemtablesMultipleColumnFamilies) {
         &job_context, nullptr, nullptr, nullptr, kNoCompression,
         db_options_.statistics.get(), &event_logger, true,
         false /* sync_output_directory */, false /* write_manifest */,
-        Env::Priority::USER);
+        Env::Priority::USER, nullptr);
     k++;
   }
   HistogramData hist;
@@ -433,7 +433,7 @@ TEST_F(FlushJobTest, Snapshots) {
                      snapshot_checker, &job_context, nullptr, nullptr, nullptr,
                      kNoCompression, db_options_.statistics.get(),
                      &event_logger, true, true /* sync_output_directory */,
-                     true /* write_manifest */, Env::Priority::USER);
+                     true /* write_manifest */, Env::Priority::USER, nullptr);
   mutex_.Lock();
   flush_job.PickMemTable();
   ASSERT_OK(flush_job.Run());
