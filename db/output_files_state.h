@@ -69,7 +69,7 @@ struct OutputFilesState {
   uint64_t num_input_records;
   uint64_t num_output_records;
   CompactionJobStats compaction_job_stats;
-  uint64_t approx_size;
+  uint64_t approx_size;  /* this appears unused in original compaction_job.cc code */
 
   
 OutputFilesState(ColumnFamilyData * _cfd, Slice* _start, Slice* _end,
