@@ -23,7 +23,9 @@
 #include "db/memtable.h"
 #include "db/memtable_list.h"
 #include "db/merge_context.h"
+#include "db/output_files_state.h"
 #include "db/range_tombstone_fragmenter.h"
+#include "db/should_stop_before.h"
 #include "db/version_set.h"
 #include "file/file_util.h"
 #include "file/filename.h"
@@ -97,7 +99,7 @@ FlushJob::FlushJob(const std::string& dbname, ColumnFamilyData* cfd,
                    CompressionType output_compression, Statistics* stats,
                    EventLogger* event_logger, bool measure_io_stats,
                    const bool sync_output_directory, const bool write_manifest,
-                   Env::Priority thread_pri)
+                   Env::Priority thread_pri, ErrorHandler * error_handler)
     : dbname_(dbname),
       cfd_(cfd),
       db_options_(db_options),
@@ -123,7 +125,8 @@ FlushJob::FlushJob(const std::string& dbname, ColumnFamilyData* cfd,
       edit_(nullptr),
       base_(nullptr),
       pick_memtable_called(false),
-      thread_pri_(thread_pri) {
+      thread_pri_(thread_pri),
+      error_handler_(error_handler) {
   // Update the thread status to indicate flush.
   ReportStartedFlush();
   TEST_SYNC_POINT("FlushJob::FlushJob()");
@@ -313,6 +316,8 @@ Status FlushJob::WriteLevel0Table() {
     uint64_t total_num_entries = 0, total_num_deletes = 0;
     uint64_t total_data_size = 0;
     size_t total_memory_usage = 0;
+    InternalKey smallest, largest, decode;
+    bool first_mem(true);
     for (MemTable* m : mems_) {
       ROCKS_LOG_INFO(
           db_options_.info_log,
@@ -328,6 +333,26 @@ Status FlushJob::WriteLevel0Table() {
       total_num_deletes += m->num_deletes();
       total_data_size += m->get_data_size();
       total_memory_usage += m->ApproximateMemoryUsage();
+
+      // key range over all 
+      memtables.back()->SeekToFirst();
+      
+      if (memtables.back()->Valid()) {
+        decode.DecodeFrom(memtables.back()->key());
+        if (first_mem
+            || cfd_->internal_comparator().Compare(decode, smallest) < 0) {
+          smallest = decode;
+        }
+
+        memtables.back()->SeekToLast();
+        decode.DecodeFrom(memtables.back()->key());
+        if (first_mem
+            || cfd_->internal_comparator().Compare(decode, largest) > 0) {
+          largest = decode;
+        }
+
+        first_mem = false;
+      }
     }
 
     event_logger_->Log() << "job" << job_context_->job_id << "event"
@@ -364,6 +389,28 @@ Status FlushJob::WriteLevel0Table() {
 
       uint64_t oldest_key_time =
           mems_.front()->ApproximateOldestKeyTime();
+
+      // ShouldStopBefore and OutputFilesState objects support prefix compaction logic and its impact
+      //  to range deletes.  Taken from compaction_job.cc.
+      std::vector<FileMetaData*> grandparents;
+      Slice smallest_slice(*smallest.rep()), largest_slice(*largest.rep());
+      Slice * smallest_ptr(smallest_slice.size() ? &smallest_slice : nullptr),
+        * largest_ptr(largest_slice.size() ? &largest_slice : nullptr);
+      if (nullptr != smallest_ptr && nullptr != largest_ptr) {
+        cfd_->current()->storage_info()->GetOverlappingInputs(1, &smallest, &largest, &grandparents);
+      }
+      
+      ShouldStopBefore stop_before(
+        &cfd_->internal_comparator(),
+        grandparents,
+        mutable_cf_options_.max_compaction_bytes,
+        mutable_cf_options_.compaction_prefix_extractor,
+        mutable_cf_options_.compaction_prefix_strict);
+
+      OutputFilesState out_files(
+        cfd_, smallest_ptr, largest_ptr, event_logger_, dbname_,
+        job_context_->job_id, true /* is_flush */, 0 /*bottommost_level*/,
+        db_mutex_, earliest_write_conflict_snapshot_, error_handler_); 
 
       s = BuildTable(
           dbname_, db_options_.env, *cfd_->ioptions(), mutable_cf_options_,
