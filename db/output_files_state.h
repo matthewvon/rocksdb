@@ -11,7 +11,9 @@
 #include "db/error_handler.h"
 #include "db/range_del_aggregator.h"
 #include "db/version_edit.h"
+#include "db/version_set.h"
 #include "file/writable_file_writer.h"
+#include "logging/event_logger.h"
 #include "rocksdb/status.h"
 #include "rocksdb/table_properties.h"
 #include "table/table_builder.h"
@@ -61,6 +63,12 @@ struct OutputFilesState {
   InstrumentedMutex* db_mutex;
   SequenceNumber earliest_snapshot;
   ErrorHandler* db_error_handler;
+  VersionSet * versions;
+  uint32_t output_path_id;
+  uint64_t preallocation_size;
+  Env::WriteLifeTimeHint write_hint;
+  uint64_t max_input_file_creation_time;
+  TableBuilderOptions tboptions;  // local copy so last four members can change
   
   uint64_t current_output_file_size;
 
@@ -76,7 +84,8 @@ OutputFilesState(ColumnFamilyData * _cfd, Slice* _start, Slice* _end,
                  EventLogger * _event_logger, const std::string& _dbname,
                  int _job_id, bool _is_flush, bool _bottommost_level,
                  InstrumentedMutex* _db_mutex, SequenceNumber _earliest_snapshot,
-                 ErrorHandler* _db_error_handler, uint64_t size = 0)
+                 ErrorHandler* _db_error_handler, VersionSet * _versions,
+                 uint32_t _output_path_id, TableBuilderOptions _tboptions, uint64_t size = 0)
   : cfd(_cfd),
     start(_start),
     end(_end),
@@ -90,6 +99,9 @@ OutputFilesState(ColumnFamilyData * _cfd, Slice* _start, Slice* _end,
     db_mutex(_db_mutex),
     earliest_snapshot(_earliest_snapshot),
     db_error_handler(_db_error_handler),
+    versions(_versions),
+    output_path_id(_output_path_id),
+    tboptions(_tboptions),
     current_output_file_size(0),
     total_bytes(0),
     num_input_records(0),
@@ -98,7 +110,7 @@ OutputFilesState(ColumnFamilyData * _cfd, Slice* _start, Slice* _end,
     }
 
   OutputFilesState(OutputFilesState&& o)
-    : dbname(std::move(o.dbname)) { *this = std::move(o); }
+  : dbname(std::move(o.dbname)), tboptions(o.tboptions) { *this = std::move(o); }
   
   OutputFilesState& operator=(OutputFilesState&& o) {
     status = std::move(o.status);
@@ -129,6 +141,8 @@ OutputFilesState(ColumnFamilyData * _cfd, Slice* _start, Slice* _end,
 
   OutputFilesState& operator=(const OutputFilesState&) = delete;
     
+
+  Status OpenCompactionOutputFile();
 
   Status FinishCompactionOutputFile(
     const Status& input_status,

@@ -67,6 +67,7 @@
 #include "db/log_reader.h"
 #include "db/log_writer.h"
 #include "db/memtable.h"
+#include "db/output_files_state.h"
 #include "db/table_cache.h"
 #include "db/version_edit.h"
 #include "db/write_batch_internal.h"
@@ -422,6 +423,31 @@ class Repairer {
       if (range_del_iter != nullptr) {
         range_del_iters.emplace_back(range_del_iter);
       }
+
+      InternalKey smallest, largest;
+      iter->SeekToFirst();
+      smallest.DecodeFrom(iter->key());
+      iter->SeekToLast();
+      largest.DecodeFrom(iter->key());
+      Slice smallest_slice(*smallest.rep()), largest_slice(*largest.rep());
+      Slice * smallest_ptr(smallest_slice.size() ? &smallest_slice : nullptr),
+        * largest_ptr(largest_slice.size() ? &largest_slice : nullptr);
+
+      MutableCFOptions mutable_cf_options(*cfd->GetLatestMutableCFOptions());
+      // initialize the builder options needed for each .sst file created
+      TableBuilderOptions tboptions(*cfd->ioptions(), mutable_cf_options,
+                                    cfd->internal_comparator(), cfd->int_tbl_prop_collector_factories(),
+                                    kNoCompression, 0 /* sample_for_compression */,
+                                    cfd->ioptions()->compression_opts, mutable_cf_options.paranoid_file_checks,
+                                    cfd->GetName(), -1, /* level */
+                                    current_time, 0 /* oldest_key_time*/,
+                                    64<<20 /*target_file_size*/, current_time);
+
+      OutputFilesState out_files(
+        cfd, smallest_ptr, largest_ptr, nullptr /* event_logger */, dbname_,
+        0 /* job_id */, true /* is_flush */, 0 /*bottommost_level*/,
+        &mutex_, kMaxSequenceNumber, nullptr/* error_handler */, &vset_, 0, tboptions); 
+
       status = BuildTable(
           dbname_, env_, *cfd->ioptions(), *cfd->GetLatestMutableCFOptions(),
           env_options_, table_cache_, iter.get(), std::move(range_del_iters),
@@ -430,6 +456,7 @@ class Repairer {
           {}, kMaxSequenceNumber, snapshot_checker, kNoCompression,
           0 /* sample_for_compression */, CompressionOptions(), false,
           nullptr /* internal_stats */, TableFileCreationReason::kRecovery,
+          out_files,
           nullptr /* event_logger */, 0 /* job_id */, Env::IO_HIGH,
           nullptr /* table_properties */, -1 /* level */, current_time,
           write_hint);

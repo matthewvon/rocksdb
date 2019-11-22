@@ -407,10 +407,19 @@ Status FlushJob::WriteLevel0Table() {
         mutable_cf_options_.compaction_prefix_extractor,
         mutable_cf_options_.compaction_prefix_strict);
 
+      // initialize the builder options needed for each .sst file created
+      TableBuilderOptions tboptions(*cfd_->ioptions(), mutable_cf_options_,
+                                    cfd_->internal_comparator(), cfd_->int_tbl_prop_collector_factories(),
+                                    output_compression_, mutable_cf_options_.sample_for_compression,
+                                    cfd_->ioptions()->compression_opts, mutable_cf_options_.paranoid_file_checks,
+                                    cfd_->GetName(), 0, /* level */
+                                    current_time, oldest_key_time,
+                                    64<<20 /*target_file_size*/, current_time);
       OutputFilesState out_files(
         cfd_, smallest_ptr, largest_ptr, event_logger_, dbname_,
         job_context_->job_id, true /* is_flush */, 0 /*bottommost_level*/,
-        db_mutex_, earliest_write_conflict_snapshot_, error_handler_); 
+        db_mutex_, earliest_write_conflict_snapshot_, error_handler_, versions_,
+        0 /* path_id */, tboptions); 
 
       s = BuildTable(
           dbname_, db_options_.env, *cfd_->ioptions(), mutable_cf_options_,
@@ -422,7 +431,9 @@ Status FlushJob::WriteLevel0Table() {
           output_compression_, mutable_cf_options_.sample_for_compression,
           cfd_->ioptions()->compression_opts,
           mutable_cf_options_.paranoid_file_checks, cfd_->internal_stats(),
-          TableFileCreationReason::kFlush, event_logger_, job_context_->job_id,
+          TableFileCreationReason::kFlush,
+          out_files,
+          event_logger_, job_context_->job_id,
           Env::IO_HIGH, &table_properties_, 0 /* level */, current_time,
           oldest_key_time, write_hint, current_time);
       LogFlush(db_options_.info_log);

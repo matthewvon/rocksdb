@@ -65,6 +65,16 @@ TableBuilder* NewTableBuilder(
       column_family_id, file);
 }
 
+TableBuilder* NewTableBuilder(TableBuilderOptions & tboptions,
+                              uint32_t column_family_id, WritableFileWriter * file)
+{
+  assert((column_family_id ==
+          TablePropertiesCollectorFactory::Context::kUnknownColumnFamily) ==
+         tboptions.column_family_name.empty());
+  return tboptions.ioptions.table_factory->NewTableBuilder(tboptions,
+      column_family_id, file);
+}
+
 Status BuildTable(
     const std::string& dbname, Env* env, const ImmutableCFOptions& ioptions,
     const MutableCFOptions& mutable_cf_options, const EnvOptions& env_options,
@@ -80,10 +90,14 @@ Status BuildTable(
     SnapshotChecker* snapshot_checker, const CompressionType compression,
     uint64_t sample_for_compression, const CompressionOptions& compression_opts,
     bool paranoid_file_checks, InternalStats* internal_stats,
-    TableFileCreationReason reason, EventLogger* event_logger, int job_id,
+    TableFileCreationReason reason,
+    OutputFilesState & output_files,
+    EventLogger* event_logger, int job_id,
     const Env::IOPriority io_priority, TableProperties* table_properties,
     int level, const uint64_t creation_time, const uint64_t oldest_key_time,
     Env::WriteLifeTimeHint write_hint, const uint64_t file_creation_time) {
+  output_files.current_output();
+
   assert((column_family_id ==
           TablePropertiesCollectorFactory::Context::kUnknownColumnFamily) ==
          column_family_name.empty());

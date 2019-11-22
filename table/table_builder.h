@@ -82,9 +82,9 @@ struct TableBuilderOptions {
       CompressionType _compression_type, uint64_t _sample_for_compression,
       const CompressionOptions& _compression_opts, bool _skip_filters,
       const std::string& _column_family_name, int _level,
-      const uint64_t _creation_time = 0, const int64_t _oldest_key_time = 0,
-      const uint64_t _target_file_size = 0,
-      const uint64_t _file_creation_time = 0)
+      uint64_t _creation_time = 0, int64_t _oldest_key_time = 0,
+      uint64_t _target_file_size = 0,
+      uint64_t _file_creation_time = 0)
       : ioptions(_ioptions),
         moptions(_moptions),
         internal_comparator(_internal_comparator),
@@ -99,6 +99,21 @@ struct TableBuilderOptions {
         oldest_key_time(_oldest_key_time),
         target_file_size(_target_file_size),
         file_creation_time(_file_creation_time) {}
+  TableBuilderOptions(const TableBuilderOptions & o)
+      : ioptions(o.ioptions),
+        moptions(o.moptions),
+        internal_comparator(o.internal_comparator),
+        int_tbl_prop_collector_factories(o.int_tbl_prop_collector_factories),
+        compression_type(o.compression_type),
+        sample_for_compression(o.sample_for_compression),
+        compression_opts(o.compression_opts),
+        skip_filters(o.skip_filters),
+        column_family_name(o.column_family_name),
+        level(o.level),
+        creation_time(o.creation_time),
+        oldest_key_time(o.oldest_key_time),
+        target_file_size(o.target_file_size),
+        file_creation_time(o.file_creation_time) {}
   const ImmutableCFOptions& ioptions;
   const MutableCFOptions& moptions;
   const InternalKeyComparator& internal_comparator;
@@ -110,10 +125,10 @@ struct TableBuilderOptions {
   bool skip_filters;  // only used by BlockBasedTableBuilder
   const std::string& column_family_name;
   int level; // what level this table/file is on, -1 for "not set, don't know"
-  const uint64_t creation_time;
-  const int64_t oldest_key_time;
-  const uint64_t target_file_size;
-  const uint64_t file_creation_time;
+  uint64_t creation_time;
+   int64_t oldest_key_time;
+   uint64_t target_file_size;
+   uint64_t file_creation_time;
 };
 
 // TableBuilder provides the interface used to build a Table

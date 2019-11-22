@@ -157,11 +157,12 @@ struct CompactionJob::SubcompactionState : public OutputFilesState {
                      EventLogger * _event_logger, const std::string& _dbname,
                      int _job_id, bool _is_flush, bool _bottommost_level,
                      InstrumentedMutex* _db_mutex, SequenceNumber _earliest_snapshot,
-                     ErrorHandler* _db_error_handler,
-                     uint64_t size = 0)
+                     ErrorHandler* _db_error_handler, VersionSet * _versions,
+                     uint32_t _output_path_id, TableBuilderOptions _tboptions, uint64_t size = 0)
     : OutputFilesState(c->column_family_data(), _start, _end, _event_logger,
                        _dbname, _job_id, _is_flush, _bottommost_level,
-                       _db_mutex, _earliest_snapshot, _db_error_handler, size),
+                       _db_mutex, _earliest_snapshot, _db_error_handler,
+                       _versions, _output_path_id, _tboptions, size),
       compaction(c) {
     assert(compaction != nullptr);
   }
@@ -352,6 +353,7 @@ void CompactionJob::Prepare() {
 
   // Generate file_levels_ for compaction berfore making Iterator
   auto* c = compact_->compaction;
+  auto* cfd = c->column_family_data();
   assert(c->column_family_data() != nullptr);
   assert(c->column_family_data()->current()->storage_info()->NumLevelFiles(
              compact_->compaction->level()) > 0);
@@ -359,6 +361,21 @@ void CompactionJob::Prepare() {
   write_hint_ =
       c->column_family_data()->CalculateSSTWriteHint(c->output_level());
   bottommost_level_ = c->bottommost_level();
+
+    // If the Column family flag is to only optimize filters for hits,
+  // we can skip creating filters if this is the bottommost_level where
+  // data is going to be found
+  bool skip_filters =
+      cfd->ioptions()->optimize_filters_for_hits && bottommost_level_;
+
+  // initialize the builder options needed for each .sst file created
+  TableBuilderOptions tboptions(*cfd->ioptions(), *(c->mutable_cf_options()),
+                                cfd->internal_comparator(), cfd->int_tbl_prop_collector_factories(),
+                                c->output_compression(), 0 /* sample_for_compression */,
+                                c->output_compression_opts(), skip_filters,
+                                cfd->GetName(), c->output_level(),
+                                0 /* creation_time */, 0 /* oldest_key_time */,
+                                c->max_output_file_size(), 0 /* current_time */);
 
   if (c->ShouldFormSubcompactions()) {
     {
@@ -372,14 +389,16 @@ void CompactionJob::Prepare() {
       Slice* end = i == boundaries_.size() ? nullptr : &boundaries_[i];
       compact_->sub_compact_states.emplace_back(c, start, end, event_logger_,
                                                 dbname_, job_id_, bottommost_level_, false, db_mutex_,
-                                                EarliestSnapshot(), db_error_handler_, sizes_[i]);
+                                                EarliestSnapshot(), db_error_handler_,
+                                                versions_, c->output_path_id(), tboptions, sizes_[i]);
     }
     RecordInHistogram(stats_, NUM_SUBCOMPACTIONS_SCHEDULED,
                       compact_->sub_compact_states.size());
   } else {
     compact_->sub_compact_states.emplace_back(c, nullptr, nullptr, event_logger_,
                                               dbname_, job_id_, bottommost_level_, false, db_mutex_,
-                                              EarliestSnapshot(), db_error_handler_);
+                                              EarliestSnapshot(), db_error_handler_,
+                                              versions_, c->output_path_id(), tboptions);
   }
 }
 

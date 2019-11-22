@@ -1180,6 +1180,31 @@ Status DBImpl::WriteLevel0TableForRecovery(int job_id, ColumnFamilyData* cfd,
       if (range_del_iter != nullptr) {
         range_del_iters.emplace_back(range_del_iter);
       }
+
+      InternalKey smallest, largest;
+      iter->SeekToFirst();
+      smallest.DecodeFrom(iter->key());
+      iter->SeekToLast();
+      largest.DecodeFrom(iter->key());
+      Slice smallest_slice(*smallest.rep()), largest_slice(*largest.rep());
+      Slice * smallest_ptr(smallest_slice.size() ? &smallest_slice : nullptr),
+        * largest_ptr(largest_slice.size() ? &largest_slice : nullptr);
+
+      // initialize the builder options needed for each .sst file created
+      TableBuilderOptions tboptions(*cfd->ioptions(), mutable_cf_options,
+                                    cfd->internal_comparator(), cfd->int_tbl_prop_collector_factories(),
+                                    GetCompressionFlush(*cfd->ioptions(), mutable_cf_options),
+                                    mutable_cf_options.sample_for_compression,
+                                    cfd->ioptions()->compression_opts, paranoid_file_checks,
+                                    cfd->GetName(), -1, /* level */
+                                    0 /*creation_time*/, 0 /* oldest_key_time */,
+                                    64<<20 /*target_file_size*/, current_time);
+      OutputFilesState out_files(
+        cfd, smallest_ptr, largest_ptr, &event_logger_, dbname_,
+        job_id, true /* is_flush */, 0 /*bottommost_level*/,
+        &mutex_, earliest_write_conflict_snapshot, &error_handler_, versions_.get(),
+        0 /*path_id*/, tboptions); 
+
       s = BuildTable(
           dbname_, env_, *cfd->ioptions(), mutable_cf_options,
           env_options_for_compaction_, cfd->table_cache(), iter.get(),
@@ -1190,6 +1215,7 @@ Status DBImpl::WriteLevel0TableForRecovery(int job_id, ColumnFamilyData* cfd,
           mutable_cf_options.sample_for_compression,
           cfd->ioptions()->compression_opts, paranoid_file_checks,
           cfd->internal_stats(), TableFileCreationReason::kRecovery,
+          out_files,
           &event_logger_, job_id, Env::IO_HIGH, nullptr /* table_properties */,
           -1 /* level */, current_time, write_hint);
       LogFlush(immutable_db_options_.info_log);

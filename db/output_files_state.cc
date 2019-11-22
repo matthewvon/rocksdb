@@ -11,12 +11,88 @@
 
 #include "db/column_family.h"
 #include "db/event_helpers.h"
+#include "db/builder.h"
 #include "db/output_files_state.h"
+#include "file/read_write_util.h"
 #include "file/sst_file_manager_impl.h"
 
 namespace rocksdb {
 
-Status OutputFilesState::FinishCompactionOutputFile(
+Status OutputFilesState::OpenCompactionOutputFile() {
+  assert(builder == nullptr);
+  // no need to lock because VersionSet::next_file_number_ is atomic
+  uint64_t file_number = versions->NewFileNumber();
+  std::string fname =
+    TableFileName(cfd->ioptions()->cf_paths,
+                    file_number, output_path_id);
+  // Fire events.
+#ifndef ROCKSDB_LITE
+  EventHelpers::NotifyTableFileCreationStarted(
+      cfd->ioptions()->listeners, dbname, cfd->GetName(), fname, job_id,
+      (is_flush ? TableFileCreationReason::kFlush : TableFileCreationReason::kCompaction));
+#endif  // !ROCKSDB_LITE
+  // Make the output file
+  std::unique_ptr<WritableFile> writable_file;
+#ifndef NDEBUG
+  bool syncpoint_arg = cfd->soptions()->use_direct_writes;
+  TEST_SYNC_POINT_CALLBACK("CompactionJob::OpenCompactionOutputFile",
+                           &syncpoint_arg);
+#endif
+  Status s = NewWritableFile(cfd->ioptions()->env, fname, &writable_file, *cfd->soptions());
+  if (!s.ok()) {
+    ROCKS_LOG_ERROR(
+        cfd->ioptions()->info_log,
+        "[%s] [JOB %d] OpenCompactionOutputFiles for table #%" PRIu64
+        " fails at NewWritableFile with status %s",
+        cfd->GetName().c_str(),
+        job_id, file_number, s.ToString().c_str());
+    LogFlush(cfd->ioptions()->info_log);
+    EventHelpers::LogAndNotifyTableFileCreationFinished(
+        event_logger, cfd->ioptions()->listeners, dbname, cfd->GetName(),
+        fname, job_id, FileDescriptor(), TableProperties(),
+        TableFileCreationReason::kCompaction, s);
+    return s;
+  }
+
+  Output out;
+  out.meta.fd =
+      FileDescriptor(file_number, output_path_id, 0);
+  out.finished = false;
+
+  outputs.push_back(out);
+  writable_file->SetIOPriority(Env::IO_LOW);
+  writable_file->SetWriteLifeTimeHint(write_hint);
+  writable_file->SetPreallocationBlockSize(static_cast<size_t>(preallocation_size));
+  const auto& listeners =
+      cfd->ioptions()->listeners;
+  outfile.reset(
+      new WritableFileWriter(std::move(writable_file), fname, *cfd->soptions(),
+                             cfd->ioptions()->env, cfd->ioptions()->statistics, listeners));
+
+  int64_t temp_current_time = 0;
+  auto get_time_status = cfd->ioptions()->env->GetCurrentTime(&temp_current_time);
+  // Safe to proceed even if GetCurrentTime fails. So, log and proceed.
+  if (!get_time_status.ok()) {
+    ROCKS_LOG_WARN(cfd->ioptions()->info_log,
+                   "Failed to get current time. Status: %s",
+                   get_time_status.ToString().c_str());
+  }
+  uint64_t current_time = static_cast<uint64_t>(temp_current_time);
+
+  uint64_t latest_key_time = max_input_file_creation_time;
+  if (latest_key_time == 0) {
+    latest_key_time = current_time;
+  }
+
+  tboptions.creation_time = latest_key_time;
+  tboptions.file_creation_time = current_time;
+  builder.reset(NewTableBuilder(tboptions,
+                                cfd->GetID(), outfile.get()));
+  LogFlush(cfd->ioptions()->info_log);
+  return s;
+  } // OutputFilesState::OpenCompactionOutputFile
+
+  Status OutputFilesState::FinishCompactionOutputFile(
     const Status& input_status, 
     CompactionRangeDelAggregator* range_del_agg,
     CompactionIterationStats* range_del_out_stats,
