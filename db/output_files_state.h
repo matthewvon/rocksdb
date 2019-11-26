@@ -110,9 +110,10 @@ OutputFilesState(ColumnFamilyData * _cfd, Slice* _start, Slice* _end,
     }
 
   OutputFilesState(OutputFilesState&& o)
-  : dbname(std::move(o.dbname)), tboptions(o.tboptions) { *this = std::move(o); }
-  
-  OutputFilesState& operator=(OutputFilesState&& o) {
+  : dbname(std::move(o.dbname)), tboptions(o.tboptions)// {/* *this = std::move(o);*/ }
+
+//  OutputFilesState& operator=(OutputFilesState&& o) {
+  {
     status = std::move(o.status);
     cfd = std::move(o.cfd);
     start = std::move(o.start);
@@ -127,13 +128,18 @@ OutputFilesState(ColumnFamilyData * _cfd, Slice* _start, Slice* _end,
     db_mutex = std::move(o.db_mutex);
     earliest_snapshot = std::move(o.earliest_snapshot);
     db_error_handler = std::move(o.db_error_handler);
+    versions = std::move(o.versions);
+    output_path_id = std::move(o.output_path_id);
+    preallocation_size = std::move(o.preallocation_size);
+    write_hint = std::move(write_hint);
+    max_input_file_creation_time = std::move(max_input_file_creation_time);
     current_output_file_size = std::move(o.current_output_file_size);
     total_bytes = std::move(o.total_bytes);
     num_input_records = std::move(o.num_input_records);
     num_output_records = std::move(o.num_output_records);
     compaction_job_stats = std::move(o.compaction_job_stats);
     approx_size = std::move(o.approx_size);
-    return *this;
+//    return *this;
   }    
 
   // Because member std::unique_ptrs do not have these.
