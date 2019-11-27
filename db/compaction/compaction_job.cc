@@ -158,25 +158,29 @@ struct CompactionJob::SubcompactionState : public OutputFilesState {
                      int _job_id, bool _is_flush, bool _bottommost_level,
                      InstrumentedMutex* _db_mutex, SequenceNumber _earliest_snapshot,
                      ErrorHandler* _db_error_handler, VersionSet * _versions,
-                     uint32_t _output_path_id, TableBuilderOptions _tboptions, uint64_t size = 0)
+                     uint32_t _output_path_id, TableBuilderOptions _tboptions,
+                     const EnvOptions * _env_options, uint64_t size = 0)
     : OutputFilesState(c->column_family_data(), _start, _end, _event_logger,
                        _dbname, _job_id, _is_flush, _bottommost_level,
                        _db_mutex, _earliest_snapshot, _db_error_handler,
-                       _versions, _output_path_id, _tboptions, size),
+                       _versions, _output_path_id, _tboptions, _env_options, size),
       compaction(c) {
     assert(compaction != nullptr);
   }
 
   SubcompactionState(SubcompactionState&& o)
     : OutputFilesState(std::move(o))
-  { *this = std::move(o); }
+//  { *this = std::move(o); }
+  { compaction = std::move(o.compaction);}
 
+#if 0  
   SubcompactionState& operator=(SubcompactionState&& o) {
     OutputFilesState::operator=(std::move(o));
     compaction = std::move(o.compaction);
     return *this;
   }
-
+#endif
+  
   // Because member std::unique_ptrs do not have these.
   SubcompactionState(const SubcompactionState&) = delete;
 
@@ -388,17 +392,17 @@ void CompactionJob::Prepare() {
       Slice* start = i == 0 ? nullptr : &boundaries_[i - 1];
       Slice* end = i == boundaries_.size() ? nullptr : &boundaries_[i];
       compact_->sub_compact_states.emplace_back(c, start, end, event_logger_,
-                                                dbname_, job_id_, bottommost_level_, false, db_mutex_,
+                                                dbname_, job_id_, false, bottommost_level_, db_mutex_,
                                                 EarliestSnapshot(), db_error_handler_,
-                                                versions_, c->output_path_id(), tboptions, sizes_[i]);
+                                                versions_, c->output_path_id(), tboptions, &env_options_, sizes_[i]);
     }
     RecordInHistogram(stats_, NUM_SUBCOMPACTIONS_SCHEDULED,
                       compact_->sub_compact_states.size());
   } else {
     compact_->sub_compact_states.emplace_back(c, nullptr, nullptr, event_logger_,
-                                              dbname_, job_id_, bottommost_level_, false, db_mutex_,
+                                              dbname_, job_id_, false, bottommost_level_, db_mutex_,
                                               EarliestSnapshot(), db_error_handler_,
-                                              versions_, c->output_path_id(), tboptions);
+                                              versions_, c->output_path_id(), tboptions, &env_options_);
   }
 }
 
@@ -905,7 +909,8 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
 
     // Open output file if necessary
     if (sub_compact->builder == nullptr) {
-      status = OpenCompactionOutputFile(sub_compact);
+//      status = OpenCompactionOutputFile(sub_compact);
+      status = sub_compact->OpenCompactionOutputFile();
       if (!status.ok()) {
         break;
       }
@@ -1011,7 +1016,8 @@ void CompactionJob::ProcessKeyValueCompaction(SubcompactionState* sub_compact) {
   if (status.ok() && sub_compact->builder == nullptr &&
       sub_compact->outputs.size() == 0 && !range_del_agg.IsEmpty()) {
     // handle subcompaction containing only range deletions
-    status = OpenCompactionOutputFile(sub_compact);
+//    status = OpenCompactionOutputFile(sub_compact);
+    status = sub_compact->OpenCompactionOutputFile();
   }
 
   // Call FinishCompactionOutputFile() even if status is not ok: it needs to
