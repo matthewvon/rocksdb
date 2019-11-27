@@ -69,6 +69,7 @@ struct OutputFilesState {
   Env::WriteLifeTimeHint write_hint;
   uint64_t max_input_file_creation_time;
   TableBuilderOptions tboptions;  // local copy so last four members can change
+  const EnvOptions * env_options;  // cfd copy not update on SetDBOptions
   
   uint64_t current_output_file_size;
 
@@ -85,7 +86,8 @@ OutputFilesState(ColumnFamilyData * _cfd, Slice* _start, Slice* _end,
                  int _job_id, bool _is_flush, bool _bottommost_level,
                  InstrumentedMutex* _db_mutex, SequenceNumber _earliest_snapshot,
                  ErrorHandler* _db_error_handler, VersionSet * _versions,
-                 uint32_t _output_path_id, TableBuilderOptions _tboptions, uint64_t size = 0)
+                 uint32_t _output_path_id, TableBuilderOptions _tboptions,
+                 const EnvOptions * _env_options, uint64_t size = 0)
   : cfd(_cfd),
     start(_start),
     end(_end),
@@ -102,6 +104,7 @@ OutputFilesState(ColumnFamilyData * _cfd, Slice* _start, Slice* _end,
     versions(_versions),
     output_path_id(_output_path_id),
     tboptions(_tboptions),
+    env_options(_env_options),
     current_output_file_size(0),
     total_bytes(0),
     num_input_records(0),
@@ -131,8 +134,9 @@ OutputFilesState(ColumnFamilyData * _cfd, Slice* _start, Slice* _end,
     versions = std::move(o.versions);
     output_path_id = std::move(o.output_path_id);
     preallocation_size = std::move(o.preallocation_size);
-    write_hint = std::move(write_hint);
-    max_input_file_creation_time = std::move(max_input_file_creation_time);
+    write_hint = std::move(o.write_hint);
+    max_input_file_creation_time = std::move(o.max_input_file_creation_time);
+    env_options = std::move(o.env_options);
     current_output_file_size = std::move(o.current_output_file_size);
     total_bytes = std::move(o.total_bytes);
     num_input_records = std::move(o.num_input_records);

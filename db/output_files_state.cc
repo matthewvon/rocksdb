@@ -64,9 +64,9 @@ Status OutputFilesState::OpenCompactionOutputFile() {
   writable_file->SetWriteLifeTimeHint(write_hint);
   writable_file->SetPreallocationBlockSize(static_cast<size_t>(preallocation_size));
   const auto& listeners =
-      cfd->ioptions()->listeners;
+    cfd->ioptions()->listeners;
   outfile.reset(
-      new WritableFileWriter(std::move(writable_file), fname, *cfd->soptions(),
+    new WritableFileWriter(std::move(writable_file), fname, *env_options, //*cfd->soptions(),
                              cfd->ioptions()->env, cfd->ioptions()->statistics, listeners));
 
   int64_t temp_current_time = 0;
