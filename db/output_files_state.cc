@@ -90,7 +90,7 @@ Status OutputFilesState::OpenCompactionOutputFile() {
                                 cfd->GetID(), outfile.get()));
   LogFlush(cfd->ioptions()->info_log);
   return s;
-  } // OutputFilesState::OpenCompactionOutputFile
+} // OutputFilesState::OpenCompactionOutputFile
 
   Status OutputFilesState::FinishCompactionOutputFile(
     const Status& input_status, 
