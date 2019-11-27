@@ -121,7 +121,7 @@ struct TableBuilderOptions {
       int_tbl_prop_collector_factories;
   CompressionType compression_type;
   uint64_t sample_for_compression;
-  const CompressionOptions& compression_opts;
+  const CompressionOptions compression_opts;
   bool skip_filters;  // only used by BlockBasedTableBuilder
   const std::string& column_family_name;
   int level; // what level this table/file is on, -1 for "not set, don't know"
