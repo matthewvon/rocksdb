@@ -86,7 +86,8 @@ OutputFilesState(ColumnFamilyData * _cfd, Slice* _start, Slice* _end,
                  int _job_id, bool _is_flush, bool _bottommost_level,
                  InstrumentedMutex* _db_mutex, SequenceNumber _earliest_snapshot,
                  ErrorHandler* _db_error_handler, VersionSet * _versions,
-                 uint32_t _output_path_id, TableBuilderOptions _tboptions,
+                 uint32_t _output_path_id, uint64_t _preallocation_size,
+                 TableBuilderOptions _tboptions,
                  const EnvOptions * _env_options, uint64_t size = 0)
   : cfd(_cfd),
     start(_start),
@@ -103,6 +104,7 @@ OutputFilesState(ColumnFamilyData * _cfd, Slice* _start, Slice* _end,
     db_error_handler(_db_error_handler),
     versions(_versions),
     output_path_id(_output_path_id),
+    preallocation_size(_preallocation_size),
     tboptions(_tboptions),
     env_options(_env_options),
     current_output_file_size(0),
@@ -113,7 +115,7 @@ OutputFilesState(ColumnFamilyData * _cfd, Slice* _start, Slice* _end,
     }
 
   OutputFilesState(OutputFilesState&& o)
-  : dbname(std::move(o.dbname)), tboptions(o.tboptions)// {/* *this = std::move(o);*/ }
+  : dbname(std::move(o.dbname)), tboptions(o.tboptions) // {/* *this = std::move(o);*/ }
 
 //  OutputFilesState& operator=(OutputFilesState&& o) {
   {

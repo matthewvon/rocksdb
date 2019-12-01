@@ -419,7 +419,7 @@ Status FlushJob::WriteLevel0Table() {
         cfd_, smallest_ptr, largest_ptr, event_logger_, dbname_,
         job_context_->job_id, true /* is_flush */, 0 /*bottommost_level*/,
         db_mutex_, earliest_write_conflict_snapshot_, error_handler_, versions_,
-        0 /* path_id */, tboptions, &env_options_); 
+        0 /* path_id */, 0 /*preallocation_size*/, tboptions, &env_options_); 
 
       s = BuildTable(
           dbname_, db_options_.env, *cfd_->ioptions(), mutable_cf_options_,

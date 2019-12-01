@@ -158,12 +158,14 @@ struct CompactionJob::SubcompactionState : public OutputFilesState {
                      int _job_id, bool _is_flush, bool _bottommost_level,
                      InstrumentedMutex* _db_mutex, SequenceNumber _earliest_snapshot,
                      ErrorHandler* _db_error_handler, VersionSet * _versions,
-                     uint32_t _output_path_id, TableBuilderOptions _tboptions,
+                     uint32_t _output_path_id, uint64_t _preallocation_size,
+                     TableBuilderOptions _tboptions,
                      const EnvOptions * _env_options, uint64_t size = 0)
     : OutputFilesState(c->column_family_data(), _start, _end, _event_logger,
                        _dbname, _job_id, _is_flush, _bottommost_level,
                        _db_mutex, _earliest_snapshot, _db_error_handler,
-                       _versions, _output_path_id, _tboptions, _env_options, size),
+                       _versions, _output_path_id, _preallocation_size,
+                       _tboptions, _env_options, size),
       compaction(c) {
     assert(compaction != nullptr);
   }
@@ -394,7 +396,8 @@ void CompactionJob::Prepare() {
       compact_->sub_compact_states.emplace_back(c, start, end, event_logger_,
                                                 dbname_, job_id_, false, bottommost_level_, db_mutex_,
                                                 EarliestSnapshot(), db_error_handler_,
-                                                versions_, c->output_path_id(), tboptions, &env_options_, sizes_[i]);
+                                                versions_, c->output_path_id(), c->OutputFilePreallocationSize(),
+                                                tboptions, &env_options_, sizes_[i]);
     }
     RecordInHistogram(stats_, NUM_SUBCOMPACTIONS_SCHEDULED,
                       compact_->sub_compact_states.size());
@@ -402,7 +405,8 @@ void CompactionJob::Prepare() {
     compact_->sub_compact_states.emplace_back(c, nullptr, nullptr, event_logger_,
                                               dbname_, job_id_, false, bottommost_level_, db_mutex_,
                                               EarliestSnapshot(), db_error_handler_,
-                                              versions_, c->output_path_id(), tboptions, &env_options_);
+                                              versions_, c->output_path_id(), c->OutputFilePreallocationSize(),
+                                              tboptions, &env_options_);
   }
 }
 

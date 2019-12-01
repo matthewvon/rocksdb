@@ -1203,7 +1203,7 @@ Status DBImpl::WriteLevel0TableForRecovery(int job_id, ColumnFamilyData* cfd,
         cfd, smallest_ptr, largest_ptr, &event_logger_, dbname_,
         job_id, true /* is_flush */, 0 /*bottommost_level*/,
         &mutex_, earliest_write_conflict_snapshot, &error_handler_, versions_.get(),
-        0 /*path_id*/, tboptions, &env_options_for_compaction_); 
+        0 /*path_id*/, 0 /*preallocation_size*/, tboptions, &env_options_for_compaction_); 
 
       s = BuildTable(
           dbname_, env_, *cfd->ioptions(), mutable_cf_options,

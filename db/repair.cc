@@ -446,7 +446,8 @@ class Repairer {
       OutputFilesState out_files(
         cfd, smallest_ptr, largest_ptr, nullptr /* event_logger */, dbname_,
         0 /* job_id */, true /* is_flush */, 0 /*bottommost_level*/,
-        &mutex_, kMaxSequenceNumber, nullptr/* error_handler */, &vset_, 0, tboptions, &env_options_); 
+        &mutex_, kMaxSequenceNumber, nullptr/* error_handler */, &vset_,
+        0 /*path_id*/, 0 /*preallocation_size*/, tboptions, &env_options_); 
 
       status = BuildTable(
           dbname_, env_, *cfd->ioptions(), *cfd->GetLatestMutableCFOptions(),
